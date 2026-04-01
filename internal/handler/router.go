@@ -49,77 +49,74 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		// TODO: เพิ่ม admin JWT middleware
 		admin := api.Group("/admin")
 		{
-			admin.POST("/auth/login", h.stub("admin login"))
-			admin.GET("/dashboard", h.stub("admin dashboard"))
+			admin.POST("/auth/login", h.adminLogin)
+			admin.GET("/dashboard", h.adminDashboard)
 
-			admin.GET("/operators", h.stub("list operators"))
-			admin.POST("/operators", h.stub("create operator"))
-			admin.GET("/operators/:id", h.stub("get operator"))
-			admin.PUT("/operators/:id", h.stub("update operator"))
-			admin.PUT("/operators/:id/status", h.stub("update operator status"))
+			admin.GET("/operators", h.listOperators)
+			admin.POST("/operators", h.createOperator)
+			admin.GET("/operators/:id", h.getOperator)
+			admin.PUT("/operators/:id", h.updateOperator)
+			admin.PUT("/operators/:id/status", h.updateOperatorStatus)
 
-			admin.GET("/members", h.stub("list members"))
-			admin.GET("/members/:id", h.stub("get member"))
-			admin.PUT("/members/:id/status", h.stub("update member status"))
+			admin.GET("/members", h.adminListMembers)
+			admin.GET("/members/:id", h.adminGetMember)
+			admin.PUT("/members/:id/status", h.adminUpdateMemberStatus)
 
-			admin.GET("/lotteries", h.stub("list lotteries"))
-			admin.POST("/lotteries", h.stub("create lottery"))
-			admin.PUT("/lotteries/:id", h.stub("update lottery"))
+			admin.GET("/lotteries", h.adminListLotteries)
+			admin.POST("/lotteries", h.adminCreateLottery)
+			admin.PUT("/lotteries/:id", h.adminUpdateLottery)
 
-			admin.GET("/rounds", h.stub("list rounds"))
-			admin.POST("/rounds", h.stub("create round"))
+			admin.GET("/rounds", h.adminListRounds)
+			admin.POST("/rounds", h.adminCreateRound)
 
-			// ⭐ กรอกผลรางวัล → trigger payout job (lotto-core)
-			admin.POST("/results/:roundId", h.stub("submit result"))
-			admin.GET("/results", h.stub("list results"))
+			admin.POST("/results/:roundId", h.adminSubmitResult)
+			admin.GET("/results", h.adminListResults)
 
-			admin.GET("/bans", h.stub("list global bans"))
-			admin.POST("/bans", h.stub("create global ban"))
-			admin.DELETE("/bans/:id", h.stub("delete global ban"))
+			admin.GET("/bans", h.adminListBans)
+			admin.POST("/bans", h.adminCreateBan)
+			admin.DELETE("/bans/:id", h.adminDeleteBan)
 
-			admin.GET("/rates", h.stub("list base rates"))
-			admin.PUT("/rates/:id", h.stub("update base rate"))
+			admin.GET("/rates", h.adminListRates)
+			admin.PUT("/rates/:id", h.adminUpdateRate)
 
-			admin.GET("/bets", h.stub("list all bets"))
-			admin.GET("/transactions", h.stub("list all transactions"))
+			admin.GET("/bets", h.adminListBets)
+			admin.GET("/transactions", h.adminListTransactions)
 
-			admin.GET("/reports/summary", h.stub("admin summary report"))
-			admin.GET("/reports/profit", h.stub("admin profit report"))
-			admin.GET("/reports/by-operator", h.stub("report by operator"))
+			admin.GET("/reports/summary", h.adminSummaryReport)
+			admin.GET("/reports/profit", h.adminProfitReport)
+			admin.GET("/reports/by-operator", h.adminReportByOperator)
 
-			admin.GET("/settings", h.stub("get settings"))
-			admin.PUT("/settings", h.stub("update settings"))
+			admin.GET("/settings", h.adminGetSettings)
+			admin.PUT("/settings", h.adminUpdateSettings)
 		}
 
 		// === Operator Routes ===
 		// TODO: เพิ่ม operator JWT middleware
 		op := api.Group("/operator")
 		{
-			op.POST("/auth/login", h.stub("operator login"))
-			op.GET("/dashboard", h.stub("operator dashboard"))
+			op.POST("/auth/login", h.operatorLogin)
+			op.GET("/dashboard", h.operatorDashboard)
 
-			op.GET("/api-keys", h.stub("list api keys"))
-			op.POST("/api-keys/regenerate", h.stub("regenerate api key"))
+			op.GET("/api-keys", h.operatorListAPIKeys)
+			op.POST("/api-keys/regenerate", h.operatorRegenerateAPIKey)
 
-			op.GET("/games", h.stub("list my games"))
-			op.PUT("/games/:id/status", h.stub("toggle game status"))
+			op.GET("/games", h.operatorListGames)
+			op.PUT("/games/:id/status", h.operatorToggleGame)
 
-			// เลขอั้น per operator (override หรือเพิ่มจาก global)
-			op.GET("/bans", h.stub("list operator bans"))
-			op.POST("/bans", h.stub("create operator ban"))
-			op.DELETE("/bans/:id", h.stub("delete operator ban"))
+			op.GET("/bans", h.operatorListBans)
+			op.POST("/bans", h.operatorCreateBan)
+			op.DELETE("/bans/:id", h.operatorDeleteBan)
 
-			// rate per operator
-			op.GET("/rates", h.stub("list operator rates"))
-			op.PUT("/rates/:id", h.stub("update operator rate"))
+			op.GET("/rates", h.operatorListRates)
+			op.PUT("/rates/:id", h.operatorUpdateRate)
 
-			op.PUT("/callbacks", h.stub("update callback urls"))
-			op.GET("/ip-whitelist", h.stub("list ip whitelist"))
-			op.POST("/ip-whitelist", h.stub("add ip"))
-			op.DELETE("/ip-whitelist/:id", h.stub("remove ip"))
+			op.PUT("/callbacks", h.operatorUpdateCallbacks)
+			op.GET("/ip-whitelist", h.operatorListIPs)
+			op.POST("/ip-whitelist", h.operatorAddIP)
+			op.DELETE("/ip-whitelist/:id", h.operatorRemoveIP)
 
-			op.GET("/reports/summary", h.stub("operator summary"))
-			op.GET("/reports/bets", h.stub("operator bets report"))
+			op.GET("/reports/summary", h.operatorSummary)
+			op.GET("/reports/bets", h.operatorBetsReport)
 		}
 	}
 
