@@ -1,6 +1,6 @@
 # Rules — lotto-provider-backoffice-api (#9)
 
-> Last updated: 2026-04-20
+> Last updated: 2026-04-21
 > Source of truth: ทุก feature ของ repo นี้ต้องมี rule file ใน folder นี้
 > Cross-repo standards: `../../../lotto-system/docs/coding_standards.md`
 
@@ -10,8 +10,11 @@
 - Format: ดูตัวอย่าง `C:/project/lotto-standalone-admin-api/docs/rules/member_levels.md`
 
 ## Rules ปัจจุบัน
-- [operator_management.md](./operator_management.md) — CRUD operators, สร้าง API key/secret, suspend, per-operator reports
-- [api_key_auth.md](./api_key_auth.md) — Operator login + API key / secret rotation + IP whitelist (serve #11)
+- [admin_auth_jwt.md](./admin_auth_jwt.md) — ✅ Admin + Operator JWT middleware (secret แยก, cookie httpOnly + Bearer fallback)
+- [admin_dashboard.md](./admin_dashboard.md) — Stats aggregation ทั้งระบบ (operators/members/bets/profits)
+- [results_settle.md](./results_settle.md) — Admin กรอกผลรางวัล → payout + callback operators
+- [operator_management.md](./operator_management.md) — CRUD operators, gen API key/secret, suspend, per-operator reports
+- [api_key_auth.md](./api_key_auth.md) — Operator self-service (API key / secret / IP whitelist / callback / reports)
 
 ## Related repos
 - Frontend (Admin): `lotto-provider-backoffice-admin-web` (#10)
@@ -19,4 +22,4 @@
 - Share DB กับ: `lotto-provider-game-api` (#7)
 
 ## Status
-WIP — auth handlers ยัง return `"token": "admin-jwt-TODO"` (ยังไม่มี JWT จริง)
+✅ JWT live (2026-04-21 — priority queue #10) — token secrets แยก admin/operator, cookie httpOnly, operator_id มาจาก claim

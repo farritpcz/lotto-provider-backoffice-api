@@ -1,15 +1,15 @@
 # API Key Auth & Operator Self-Service — provider-backoffice-api (#9)
 
-> Last updated: 2026-04-20 (v1 initial — starter rule, expand as feature matures)
-> Related code: `internal/handler/operator_handlers.go` (operatorLogin, operatorDashboard, api-keys/ip-whitelist/callbacks handlers), `internal/handler/router.go` (operator group)
-> Status: WIP — JWT placeholder (`"operator-jwt-TODO"`), operator_id ยังรับจาก query param ชั่วคราว
+> Last updated: 2026-04-21 (v2 — JWT wired end-to-end)
+> Related code: `internal/handler/operator_handlers.go` (operatorLogin + 13 endpoints), `internal/middleware/auth.go` (OperatorJWTAuth + GetOperatorID), `internal/handler/router.go:operatorPublic/op groups`
+> Status: ✅ Active — JWT live; ดูคู่กับ `admin_auth_jwt.md`
 
 ## Purpose
 Operator-facing endpoints (serve web #11) — ให้ operator ดู/rotate API key, จัดการ IP whitelist, ตั้ง callback URL, ดู dashboard/reports ของตัวเอง
 
 ## Rules
-1. Group `/api/v1/operator/*` ใช้ Operator JWT (TODO middleware — ตอนนี้รับ `operator_id` จาก query)
-2. Operator เห็นเฉพาะข้อมูลของตัวเอง (scope ด้วย `operator_id`) — ห้าม query ข้าม operator
+1. Group `/api/v1/operator/*` ใช้ `middleware.OperatorJWTAuth(secret)` (secret = `OPERATOR_JWT_SECRET`); ยกเว้น `/auth/login` ที่เปิด public
+2. Operator เห็นเฉพาะข้อมูลของตัวเอง — `operator_id` มาจาก JWT claim ผ่าน `middleware.GetOperatorID(c)` (ห้ามรับจาก query param ฝั่ง client)
 3. API key/secret regen → secret แสดงเพียงครั้งเดียว ต้องแจ้งฝั่ง frontend ให้ copy ทันที
 4. IP whitelist เก็บเป็น comma-separated string (ตามที่ `operator-web/ip-whitelist/page.tsx` อ่าน `data.ip_whitelist`)
 5. Callback URL ใช้ตอน Seamless wallet notify (ฝั่ง game-api เรียกกลับ) — ต้องเป็น HTTPS
@@ -35,3 +35,4 @@ Operator-facing endpoints (serve web #11) — ให้ operator ดู/rotate A
 
 ## Change Log
 - 2026-04-20: v1 initial skeleton
+- 2026-04-21: v2 — JWT middleware ใช้งานจริงแล้ว (#10 priority queue); IP whitelist remove endpoint implement จริงแทน stub

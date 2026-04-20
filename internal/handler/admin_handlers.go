@@ -17,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/farritpcz/lotto-provider-backoffice-api/internal/middleware"
 	"github.com/farritpcz/lotto-provider-backoffice-api/internal/model"
 )
 
@@ -42,7 +43,20 @@ func (h *Handler) adminLogin(c *gin.Context) {
 
 	now := time.Now()
 	h.DB.Model(&admin).Update("last_login_at", &now)
-	ok(c, gin.H{"admin": admin, "token": "admin-jwt-TODO"})
+
+	// ⭐ gen JWT (secret + expiry จาก h.AdminJWT*) — admin_handlers ไม่ใช้ role จริงๆ ส่ง "admin"
+	token, err := middleware.GenerateAdminToken(admin.ID, admin.Username, "admin", h.AdminJWTSecret, h.AdminJWTExpiryHours)
+	if err != nil {
+		fail(c, 500, "failed to issue token")
+		return
+	}
+
+	// httpOnly cookie (admin-web) + ส่งใน body ด้วย (API client fallback)
+	// maxAge หน่วย วินาที (expiryHours * 3600); SameSite=Lax เหมาะสำหรับ same-site + cross-subdomain
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie("admin_token", token, h.AdminJWTExpiryHours*3600, "/", "", false, true)
+
+	ok(c, gin.H{"admin": admin, "token": token})
 }
 
 // =============================================================================
@@ -245,7 +259,7 @@ func (h *Handler) adminSubmitResult(c *gin.Context) {
 		"status": "resulted", "resulted_at": &now,
 	})
 
-	// ⭐ TODO: payout ด้วย lotto-core + callback แจ้ง operators
+	// AIDEV-TODO(farri, 2026-04-21): payout ด้วย lotto-core/payout + callback แจ้ง operators (ดู seamless_wallet.md)
 	// เหมือน standalone #5 แต่เพิ่ม: GroupWinnersByOperator() → callback ทุก operator
 
 	ok(c, gin.H{"round_id": roundID, "result": req, "status": "resulted"})

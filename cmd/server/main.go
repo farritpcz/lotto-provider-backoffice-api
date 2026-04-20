@@ -38,6 +38,11 @@ func main() {
 	r := gin.Default()
 	h := handler.NewHandler()
 	h.DB = db
+	// ⭐ inject JWT config (admin + operator แยก secret)
+	h.AdminJWTSecret = cfg.AdminJWTSecret
+	h.AdminJWTExpiryHours = cfg.AdminJWTExpiryHours
+	h.OperatorJWTSecret = cfg.OperatorJWTSecret
+	h.OperatorJWTExpiryHours = cfg.OperatorJWTExpiryHours
 	h.SetupRoutes(r)
 
 	log.Println("🔧 lotto-provider-backoffice-api starting on :9081")

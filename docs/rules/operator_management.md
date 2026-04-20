@@ -1,14 +1,14 @@
 # Operator Management — provider-backoffice-api (#9)
 
-> Last updated: 2026-04-20 (v1 initial — starter rule, expand as feature matures)
-> Related code: `internal/handler/admin_handlers.go` (adminLogin, adminDashboard, listOperators/createOperator/getOperator/updateOperator/updateOperatorStatus), `internal/handler/router.go` (admin group)
-> Status: WIP — CRUD มีแล้ว แต่ JWT middleware ยังไม่มี (router มี TODO)
+> Last updated: 2026-04-21 (v2 — JWT wired end-to-end)
+> Related code: `internal/handler/admin_handlers.go` (adminLogin, adminDashboard, listOperators/createOperator/getOperator/updateOperator/updateOperatorStatus), `internal/middleware/auth.go` (AdminJWTAuth), `internal/handler/router.go` (admin group)
+> Status: ✅ Active — JWT protected; ดูคู่กับ `admin_auth_jwt.md`
 
 ## Purpose
 Admin API สำหรับสร้าง/จัดการ operator (ผู้ให้บริการที่ integrate เข้ามา) — รวมถึง gen API key/secret, suspend, ดู stats แยก operator
 
 ## Rules
-1. ทุก endpoint อยู่ใต้ group `/api/v1/admin/*` + Admin JWT (TODO middleware)
+1. ทุก endpoint อยู่ใต้ group `/api/v1/admin/*` + `middleware.AdminJWTAuth(ADMIN_JWT_SECRET)` ยกเว้น `/auth/login` ที่เปิด public
 2. สร้าง operator ต้อง auto-gen `api_key` + `secret_key` ด้วย `crypto/rand` + hex encode — secret return ครั้งเดียวตอน create
 3. `updateOperatorStatus`: values = `"active"` | `"suspended"` (เทียบกับ `op.Status` ตอน login)
 4. Operator ที่ status != `"active"` → login ล้มเหลว 403 `"account suspended"` (operator side) / สิทธิ์หมด (admin side)

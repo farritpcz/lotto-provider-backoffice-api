@@ -10,11 +10,13 @@ import (
 	"encoding/hex"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/farritpcz/lotto-provider-backoffice-api/internal/middleware"
 	"github.com/farritpcz/lotto-provider-backoffice-api/internal/model"
 )
 
@@ -38,7 +40,18 @@ func (h *Handler) operatorLogin(c *gin.Context) {
 	}
 	if op.Status != "active" { fail(c, 403, "operator suspended"); return }
 
-	ok(c, gin.H{"operator": op, "token": "operator-jwt-TODO"})
+	// ⭐ gen JWT (secret + expiry จาก h.OperatorJWT*)
+	token, err := middleware.GenerateOperatorToken(op.ID, op.Username, h.OperatorJWTSecret, h.OperatorJWTExpiryHours)
+	if err != nil {
+		fail(c, 500, "failed to issue token")
+		return
+	}
+
+	// httpOnly cookie — คู่กับ `operator_token` ที่ middleware อ่าน
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie("operator_token", token, h.OperatorJWTExpiryHours*3600, "/", "", false, true)
+
+	ok(c, gin.H{"operator": op, "token": token})
 }
 
 // =============================================================================
@@ -46,9 +59,8 @@ func (h *Handler) operatorLogin(c *gin.Context) {
 // =============================================================================
 
 func (h *Handler) operatorDashboard(c *gin.Context) {
-	// TODO: ดึง operator_id จาก JWT token
-	// ตอนนี้ใช้ query param ชั่วคราว
-	opID, _ := strconv.ParseInt(c.DefaultQuery("operator_id", "1"), 10, 64)
+	// ⭐ operator_id มาจาก JWT claim (ผ่าน middleware.OperatorJWTAuth)
+	opID := middleware.GetOperatorID(c)
 	today := time.Now().Format("2006-01-02")
 
 	var stats struct {
@@ -71,7 +83,7 @@ func (h *Handler) operatorDashboard(c *gin.Context) {
 // =============================================================================
 
 func (h *Handler) operatorListAPIKeys(c *gin.Context) {
-	opID, _ := strconv.ParseInt(c.DefaultQuery("operator_id", "1"), 10, 64)
+	opID := middleware.GetOperatorID(c)
 	var op model.Operator
 	if err := h.DB.First(&op, opID).Error; err != nil { fail(c, 404, "not found"); return }
 	ok(c, gin.H{
@@ -82,7 +94,7 @@ func (h *Handler) operatorListAPIKeys(c *gin.Context) {
 }
 
 func (h *Handler) operatorRegenerateAPIKey(c *gin.Context) {
-	opID, _ := strconv.ParseInt(c.DefaultQuery("operator_id", "1"), 10, 64)
+	opID := middleware.GetOperatorID(c)
 
 	apiKeyBytes := make([]byte, 32)
 	rand.Read(apiKeyBytes)
@@ -109,7 +121,7 @@ func (h *Handler) operatorRegenerateAPIKey(c *gin.Context) {
 // =============================================================================
 
 func (h *Handler) operatorListGames(c *gin.Context) {
-	opID, _ := strconv.ParseInt(c.DefaultQuery("operator_id", "1"), 10, 64)
+	opID := middleware.GetOperatorID(c)
 
 	// ดึง lottery types ทั้งหมด + status ของ operator
 	var types []model.LotteryType
@@ -137,7 +149,7 @@ func (h *Handler) operatorListGames(c *gin.Context) {
 }
 
 func (h *Handler) operatorToggleGame(c *gin.Context) {
-	opID, _ := strconv.ParseInt(c.DefaultQuery("operator_id", "1"), 10, 64)
+	opID := middleware.GetOperatorID(c)
 	gameID, _ := strconv.ParseInt(c.Param("id"), 10, 64)
 	var req struct { Status string `json:"status" binding:"required"` }
 	if err := c.ShouldBindJSON(&req); err != nil { fail(c, 400, err.Error()); return }
@@ -159,14 +171,14 @@ func (h *Handler) operatorToggleGame(c *gin.Context) {
 // =============================================================================
 
 func (h *Handler) operatorListBans(c *gin.Context) {
-	opID, _ := strconv.ParseInt(c.DefaultQuery("operator_id", "1"), 10, 64)
+	opID := middleware.GetOperatorID(c)
 	var bans []model.NumberBan
 	h.DB.Where("operator_id = ? AND status = ?", opID, "active").Find(&bans)
 	ok(c, bans)
 }
 
 func (h *Handler) operatorCreateBan(c *gin.Context) {
-	opID, _ := strconv.ParseInt(c.DefaultQuery("operator_id", "1"), 10, 64)
+	opID := middleware.GetOperatorID(c)
 	var ban model.NumberBan
 	if err := c.ShouldBindJSON(&ban); err != nil { fail(c, 400, err.Error()); return }
 	ban.OperatorID = &opID // ⭐ per-operator ban
@@ -186,7 +198,7 @@ func (h *Handler) operatorDeleteBan(c *gin.Context) {
 // =============================================================================
 
 func (h *Handler) operatorListRates(c *gin.Context) {
-	opID, _ := strconv.ParseInt(c.DefaultQuery("operator_id", "1"), 10, 64)
+	opID := middleware.GetOperatorID(c)
 	var rates []model.PayRate
 	// ดึง rate ของ operator (ถ้ามี) + global rate (ถ้า operator ไม่ได้ตั้ง)
 	h.DB.Preload("BetType").Preload("LotteryType").
@@ -208,7 +220,7 @@ func (h *Handler) operatorUpdateRate(c *gin.Context) {
 // =============================================================================
 
 func (h *Handler) operatorUpdateCallbacks(c *gin.Context) {
-	opID, _ := strconv.ParseInt(c.DefaultQuery("operator_id", "1"), 10, 64)
+	opID := middleware.GetOperatorID(c)
 	var req struct { CallbackURL string `json:"callback_url" binding:"required"` }
 	if err := c.ShouldBindJSON(&req); err != nil { fail(c, 400, err.Error()); return }
 	h.DB.Model(&model.Operator{}).Where("id = ?", opID).Update("callback_url", req.CallbackURL)
@@ -216,14 +228,14 @@ func (h *Handler) operatorUpdateCallbacks(c *gin.Context) {
 }
 
 func (h *Handler) operatorListIPs(c *gin.Context) {
-	opID, _ := strconv.ParseInt(c.DefaultQuery("operator_id", "1"), 10, 64)
+	opID := middleware.GetOperatorID(c)
 	var op model.Operator
 	h.DB.First(&op, opID)
 	ok(c, gin.H{"ip_whitelist": op.IPWhitelist})
 }
 
 func (h *Handler) operatorAddIP(c *gin.Context) {
-	opID, _ := strconv.ParseInt(c.DefaultQuery("operator_id", "1"), 10, 64)
+	opID := middleware.GetOperatorID(c)
 	var req struct { IP string `json:"ip" binding:"required"` }
 	if err := c.ShouldBindJSON(&req); err != nil { fail(c, 400, err.Error()); return }
 	var op model.Operator
@@ -234,9 +246,46 @@ func (h *Handler) operatorAddIP(c *gin.Context) {
 	ok(c, gin.H{"ip_whitelist": op.IPWhitelist})
 }
 
+// operatorRemoveIP — DELETE /ip-whitelist/:id
+// URL param `:id` = IP address ที่จะลบ (URL-encoded ถ้ามีอักษรพิเศษ เช่น ":")
+// ภายในเก็บเป็น comma-separated string ใน op.ip_whitelist
 func (h *Handler) operatorRemoveIP(c *gin.Context) {
-	// TODO: parse comma-separated list, remove specific IP
-	ok(c, gin.H{"message": "remove IP — TODO"})
+	opID := middleware.GetOperatorID(c)
+	target := c.Param("id")
+	if target == "" {
+		fail(c, 400, "ต้องระบุ IP ที่จะลบ")
+		return
+	}
+
+	var op model.Operator
+	if err := h.DB.First(&op, opID).Error; err != nil {
+		fail(c, 404, "ไม่พบ operator")
+		return
+	}
+
+	// split, filter out matching IP, rejoin
+	parts := strings.Split(op.IPWhitelist, ",")
+	kept := make([]string, 0, len(parts))
+	removed := false
+	for _, p := range parts {
+		ip := strings.TrimSpace(p)
+		if ip == "" {
+			continue
+		}
+		if ip == target {
+			removed = true
+			continue
+		}
+		kept = append(kept, ip)
+	}
+	if !removed {
+		fail(c, 404, "ไม่พบ IP นี้ใน whitelist")
+		return
+	}
+
+	newList := strings.Join(kept, ",")
+	h.DB.Model(&op).Update("ip_whitelist", newList)
+	ok(c, gin.H{"ip_whitelist": newList, "removed": target})
 }
 
 // =============================================================================
@@ -244,7 +293,7 @@ func (h *Handler) operatorRemoveIP(c *gin.Context) {
 // =============================================================================
 
 func (h *Handler) operatorSummary(c *gin.Context) {
-	opID, _ := strconv.ParseInt(c.DefaultQuery("operator_id", "1"), 10, 64)
+	opID := middleware.GetOperatorID(c)
 	dateFrom := c.DefaultQuery("from", time.Now().AddDate(0,0,-7).Format("2006-01-02"))
 	dateTo := c.DefaultQuery("to", time.Now().Format("2006-01-02"))
 
@@ -262,7 +311,7 @@ func (h *Handler) operatorSummary(c *gin.Context) {
 }
 
 func (h *Handler) operatorBetsReport(c *gin.Context) {
-	opID, _ := strconv.ParseInt(c.DefaultQuery("operator_id", "1"), 10, 64)
+	opID := middleware.GetOperatorID(c)
 	page, perPage := pageParams(c)
 	var bets []model.Bet
 	var total int64

@@ -35,10 +35,18 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/farritpcz/lotto-core/httpx"
+	"github.com/farritpcz/lotto-provider-backoffice-api/internal/middleware"
 )
 
 type Handler struct {
 	DB *gorm.DB // inject จาก main.go — ⭐ share DB กับ game-api (#7)
+
+	// ⭐ JWT config — inject จาก main.go (อ่าน config.Load())
+	// แยก secret admin/operator เพื่อไม่ให้ token ข้าม audience
+	AdminJWTSecret         string
+	AdminJWTExpiryHours    int
+	OperatorJWTSecret      string
+	OperatorJWTExpiryHours int
 }
 
 func NewHandler() *Handler { return &Handler{} }
@@ -47,10 +55,14 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 	api := r.Group("/api/v1")
 	{
 		// === Admin Routes ===
-		// TODO: เพิ่ม admin JWT middleware
+		// ⭐ login เปิด public (ไม่ใช้ middleware) — endpoint อื่นใต้ admin.Group บังคับ JWT
+		adminPublic := api.Group("/admin")
+		adminPublic.POST("/auth/login", h.adminLogin)
+
 		admin := api.Group("/admin")
+		admin.Use(middleware.AdminJWTAuth(h.AdminJWTSecret))
 		{
-			admin.POST("/auth/login", h.adminLogin)
+			// หมายเหตุ: /auth/login อยู่ adminPublic (ด้านบน) — ที่นี่เฉพาะ protected
 			admin.GET("/dashboard", h.adminDashboard)
 
 			admin.GET("/operators", h.listOperators)
@@ -92,10 +104,13 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 		}
 
 		// === Operator Routes ===
-		// TODO: เพิ่ม operator JWT middleware
+		// ⭐ login เปิด public — endpoint อื่นใต้ op.Group บังคับ JWT
+		operatorPublic := api.Group("/operator")
+		operatorPublic.POST("/auth/login", h.operatorLogin)
+
 		op := api.Group("/operator")
+		op.Use(middleware.OperatorJWTAuth(h.OperatorJWTSecret))
 		{
-			op.POST("/auth/login", h.operatorLogin)
 			op.GET("/dashboard", h.operatorDashboard)
 
 			op.GET("/api-keys", h.operatorListAPIKeys)
