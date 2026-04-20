@@ -30,10 +30,11 @@ package handler
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+
+	"github.com/farritpcz/lotto-core/httpx"
 )
 
 type Handler struct {
@@ -130,19 +131,11 @@ func (h *Handler) SetupRoutes(r *gin.Engine) {
 // ⭐ คล้ายกับ standalone-admin-api (#5) แต่มี operator scope เพิ่ม
 // =============================================================================
 
-func ok(c *gin.Context, data interface{}) {
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": data})
-}
-func fail(c *gin.Context, status int, msg string) {
-	c.JSON(status, gin.H{"success": false, "error": msg})
-}
-func pageParams(c *gin.Context) (int, int) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	perPage, _ := strconv.Atoi(c.DefaultQuery("per_page", "20"))
-	if page < 1 { page = 1 }
-	if perPage < 1 || perPage > 100 { perPage = 20 }
-	return page, perPage
-}
+// Response helpers — thin wrappers over lotto-core/httpx (source of truth).
+// See C:/project/lotto-core/httpx/response.go
+func ok(c *gin.Context, data interface{})         { httpx.OK(c, data) }
+func fail(c *gin.Context, status int, msg string) { httpx.Fail(c, status, msg) }
+func pageParams(c *gin.Context) (int, int)        { return httpx.PageParams(c) }
 
 // stub สำหรับ endpoints ที่ยัง implement ไม่ทัน
 func (h *Handler) stub(name string) gin.HandlerFunc {
