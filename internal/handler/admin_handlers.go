@@ -17,8 +17,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 
+	coreTypes "github.com/farritpcz/lotto-core/types"
+
 	"github.com/farritpcz/lotto-provider-backoffice-api/internal/middleware"
 	"github.com/farritpcz/lotto-provider-backoffice-api/internal/model"
+	"github.com/farritpcz/lotto-provider-backoffice-api/internal/service"
 )
 
 // =============================================================================
@@ -259,10 +262,19 @@ func (h *Handler) adminSubmitResult(c *gin.Context) {
 		"status": "resulted", "resulted_at": &now,
 	})
 
-	// AIDEV-TODO(farri, 2026-04-21): payout ด้วย lotto-core/payout + callback แจ้ง operators (ดู seamless_wallet.md)
-	// เหมือน standalone #5 แต่เพิ่ม: GroupWinnersByOperator() → callback ทุก operator
+	// ⭐ payout: เทียบ bets + จ่ายเงินผู้ชนะ + callback ไป operators
+	// logic อยู่ใน service.SettleService (ดู seamless_wallet.md)
+	settler := service.NewSettleService(h.DB)
+	summary := settler.SettleRound(roundID, coreTypes.RoundResult{
+		Top3: req.Top3, Top2: req.Top2, Bottom2: req.Bottom2,
+	})
 
-	ok(c, gin.H{"round_id": roundID, "result": req, "status": "resulted"})
+	ok(c, gin.H{
+		"round_id": roundID,
+		"result":   req,
+		"status":   "resulted",
+		"settle":   summary,
+	})
 }
 
 func (h *Handler) adminListResults(c *gin.Context) {
