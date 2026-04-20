@@ -66,18 +66,36 @@ func (h *Handler) adminLogin(c *gin.Context) {
 // Dashboard — ภาพรวมทั้งระบบ
 // =============================================================================
 
+// adminDashboard — ภาพรวม + กราฟ 7 วัน (สำหรับ provider-backoffice-admin-web)
+//
+// Response:
+//   {
+//     "total_operators": N, "active_operators": N, "total_members": N,
+//     "total_bets_today": N, "total_amount_today": F, "total_win_today": F,
+//     "profit_today": F, "open_rounds": N,
+//     "chart_7d": [ { "date": "YYYY-MM-DD", "bet_amount": F, "win_amount": F, "profit": F }, ... ]  (7 รายการ, วันล่าสุดสุดท้าย)
+//   }
 func (h *Handler) adminDashboard(c *gin.Context) {
 	today := time.Now().Format("2006-01-02")
-	var stats struct {
-		TotalOperators  int64   `json:"total_operators"`
-		ActiveOperators int64   `json:"active_operators"`
-		TotalMembers    int64   `json:"total_members"`
-		TotalBetsToday  int64   `json:"total_bets_today"`
-		TotalAmountToday float64 `json:"total_amount_today"`
-		TotalWinToday   float64 `json:"total_win_today"`
-		ProfitToday     float64 `json:"profit_today"`
-		OpenRounds      int64   `json:"open_rounds"`
+	type chartPoint struct {
+		Date      string  `json:"date"`
+		BetAmount float64 `json:"bet_amount"`
+		WinAmount float64 `json:"win_amount"`
+		Profit    float64 `json:"profit"`
 	}
+	var stats struct {
+		TotalOperators   int64        `json:"total_operators"`
+		ActiveOperators  int64        `json:"active_operators"`
+		TotalMembers     int64        `json:"total_members"`
+		TotalBetsToday   int64        `json:"total_bets_today"`
+		TotalAmountToday float64      `json:"total_amount_today"`
+		TotalWinToday    float64      `json:"total_win_today"`
+		ProfitToday      float64      `json:"profit_today"`
+		OpenRounds       int64        `json:"open_rounds"`
+		Chart7d          []chartPoint `json:"chart_7d"`
+	}
+
+	// summary counters
 	h.DB.Model(&model.Operator{}).Count(&stats.TotalOperators)
 	h.DB.Model(&model.Operator{}).Where("status = ?", "active").Count(&stats.ActiveOperators)
 	h.DB.Model(&model.Member{}).Count(&stats.TotalMembers)
@@ -86,6 +104,43 @@ func (h *Handler) adminDashboard(c *gin.Context) {
 	h.DB.Model(&model.Bet{}).Where("DATE(created_at) = ? AND status = ?", today, "won").Select("COALESCE(SUM(win_amount),0)").Scan(&stats.TotalWinToday)
 	stats.ProfitToday = stats.TotalAmountToday - stats.TotalWinToday
 	h.DB.Model(&model.LotteryRound{}).Where("status = ?", "open").Count(&stats.OpenRounds)
+
+	// ⭐ chart 7 วันย้อนหลัง — group by DATE(created_at)
+	type dayRow struct {
+		Day       string  `gorm:"column:day"`
+		BetAmount float64 `gorm:"column:bet_amount"`
+		WinAmount float64 `gorm:"column:win_amount"`
+	}
+	var rows []dayRow
+	since := time.Now().AddDate(0, 0, -6).Format("2006-01-02") // 7-day window inclusive
+	h.DB.Table("bets").
+		Select("DATE(created_at) AS day, COALESCE(SUM(amount), 0) AS bet_amount, COALESCE(SUM(CASE WHEN status='won' THEN win_amount ELSE 0 END), 0) AS win_amount").
+		Where("DATE(created_at) >= ?", since).
+		Group("DATE(created_at)").
+		Order("day ASC").
+		Scan(&rows)
+
+	// สร้าง map day → row แล้วเดิน 7 วันเต็มเพื่อเติม 0 ในวันที่ไม่มีข้อมูล
+	byDay := make(map[string]dayRow, len(rows))
+	for _, r := range rows {
+		byDay[r.Day] = r
+	}
+	stats.Chart7d = make([]chartPoint, 0, 7)
+	for i := 6; i >= 0; i-- {
+		d := time.Now().AddDate(0, 0, -i).Format("2006-01-02")
+		r, ok := byDay[d]
+		if !ok {
+			stats.Chart7d = append(stats.Chart7d, chartPoint{Date: d})
+			continue
+		}
+		stats.Chart7d = append(stats.Chart7d, chartPoint{
+			Date:      d,
+			BetAmount: r.BetAmount,
+			WinAmount: r.WinAmount,
+			Profit:    r.BetAmount - r.WinAmount,
+		})
+	}
+
 	ok(c, stats)
 }
 
